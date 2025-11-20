@@ -6,6 +6,14 @@ CREATE DATABASE IF NOT EXISTS team05_db DEFAULT CHARACTER SET utf8mb4 COLLATE ut
 USE team05_db;
 
 -- --------------------------------------------------------
+-- 인덱스 삭제
+-- --------------------------------------------------------
+DROP INDEX IF EXISTS matches_date_idx ON matches(date);
+DROP INDEX IF EXISTS matchstat_match_id_idx ON match_stat(match_id);
+DROP INDEX IF EXISTS matches_stadium_date_idx ON matches;
+DROP INDEX IF EXISTS matches_league_date_idx ON matches;
+
+-- --------------------------------------------------------
 -- 테이블 삭제 (외래 키 제약조건을 피하기 위해 생성의 역순으로 삭제)
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS comments;
@@ -158,3 +166,15 @@ CREATE TABLE comments (
   FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL,
   FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL
 );
+
+-- --------------------------------------------------------
+-- 5. 인덱스 생성
+-- --------------------------------------------------------
+
+-- 단일 인덱스
+CREATE INDEX matches_date_idx ON matches(date);
+CREATE INDEX matchstat_match_id_idx ON match_stat(match_id);
+
+-- 복합 인덱스
+CREATE INDEX matches_stadium_date_idx ON matches (stadium_id, date);
+CREATE INDEX matches_league_date_idx ON matches (league_id, date);
