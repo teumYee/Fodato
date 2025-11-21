@@ -13,8 +13,22 @@ $monthFilter = $_GET['month'] ?? date('Y-m');
 $matches = [];
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'];
-$basePath = dirname(dirname($_SERVER['PHP_SELF']));
+// frontend/pages/에서 backend/로 가려면 3단계 위로 올라가야 함
+$basePath = dirname(dirname(dirname($_SERVER['PHP_SELF'])));
 $baseApiUrl = $protocol . '://' . $host . $basePath . '/backend/api/matches/list.php';
+
+// 경기장별 지역 정보 (region_name 조회용 - API 응답에 없는 정보 보완)
+$stadiumsMap = [];
+$stadiumsQuery = "SELECT s.name, r.name as region_name, r.id as region_id 
+                  FROM stadiums s 
+                  JOIN regions r ON s.region_id = r.id";
+$stadiumsList = $db->query($stadiumsQuery)->fetchAll();
+foreach ($stadiumsList as $stadium) {
+    $stadiumsMap[$stadium['name']] = [
+        'region_name' => $stadium['region_name'],
+        'region_id' => $stadium['region_id']
+    ];
+}
 
 // 월 필터링: 해당 월의 모든 날짜에 대해 API 호출
 $startDate = date('Y-m-01', strtotime($monthFilter . '-01'));
@@ -31,23 +45,36 @@ while ($currentDate <= $endDate) {
     curl_setopt($ch, CURLOPT_URL, $apiUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     $apiResponse = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
     
     if ($apiResponse !== false && $httpCode == 200) {
         $apiData = json_decode($apiResponse, true);
-        if (isset($apiData['data']) && is_array($apiData['data'])) {
+        if ($apiData !== null && isset($apiData['data']) && is_array($apiData['data'])) {
             foreach ($apiData['data'] as $match) {
                 // date 필드를 match_date로 변환하여 기존 코드와 호환
                 $match['match_date'] = $match['date'] ?? $currentDate;
                 $match['match_time'] = $match['time'] ?? '';
                 $match['id'] = $match['match_id'] ?? '';
                 $match['stadium_name'] = $match['stadium'] ?? '';
-                $match['region_name'] = ''; // list.php에는 region_name이 없음
+                
+                // 경기장 이름으로 지역 정보 조회
+                $stadiumName = $match['stadium_name'];
+                if (!empty($stadiumName) && isset($stadiumsMap[$stadiumName])) {
+                    $match['region_name'] = $stadiumsMap[$stadiumName]['region_name'];
+                } else {
+                    $match['region_name'] = '';
+                }
+                
                 $matches[] = $match;
             }
         }
+    } else {
+        // API 호출 실패 시 에러 로깅
+        error_log("API 호출 실패: URL=$apiUrl, HTTP=$httpCode, Error=$curlError, Response=" . substr($apiResponse, 0, 500));
     }
     
     $currentDate = date('Y-m-d', strtotime($currentDate . ' +1 day'));
@@ -62,7 +89,7 @@ usort($matches, function($a, $b) {
     return strcmp($a['match_time'], $b['match_time']);
 });
 
-// 지역 목록
+// 지역 목록 (필터용)
 $regions = $db->query("SELECT * FROM regions ORDER BY name")->fetchAll();
 
 include '../includes/header.php';
@@ -98,6 +125,7 @@ include '../includes/header.php';
 <div class="matches-section">
     <?php if (empty($matches)): ?>
         <p class="no-data">데이터 없음</p>
+        <p style="color: #666; font-size: 0.9em;">해당 기간에 등록된 경기가 없습니다.</p>
     <?php else: ?>
         <div class="matches-list">
             <?php 
