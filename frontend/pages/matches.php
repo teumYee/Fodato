@@ -17,6 +17,7 @@ $host = $_SERVER['HTTP_HOST'];
 $basePath = dirname(dirname(dirname($_SERVER['PHP_SELF'])));
 $baseApiUrl = $protocol . '://' . $host . $basePath . '/backend/api/matches/list.php';
 
+//
 // 경기장별 지역 정보 (region_name 조회용 - API 응답에 없는 정보 보완)
 $stadiumsMap = [];
 $stadiumsQuery = "SELECT s.name, r.name as region_name, r.id as region_id 
